@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ETF Picker - 나에게 맞는 ETF 찾기</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --purple: #7c3aed;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Pretendard', 'Noto Sans KR', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    .yt-banner { position: sticky; top: 0; z-index: 200; }
+    header {
+      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #0284c7 100%);
+      color: white; padding: 16px 24px; text-align: center;
+      position: sticky; top: 49px; z-index: 100;
+      box-shadow: 0 2px 16px rgba(37,99,235,0.35);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
+    header p { font-size: 0.82rem; opacity: 0.8; margin-top: 3px; }
+
+    .container { max-width: 1500px; margin: 0 auto; padding: 18px 14px; display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 950px) { .container { grid-template-columns: 1fr; } }
+
+    /* ── Filter ── */
+    .filter-panel { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; position: sticky; top: 130px; }
+    .filter-panel h2 { font-size: 0.9rem; font-weight: 700; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+    .filter-group { margin-bottom: 12px; }
+    .filter-group label { display: block; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+    .chip-group { display: flex; flex-wrap: wrap; gap: 4px; }
+    .chip { padding: 3px 10px; border-radius: 20px; border: 1.5px solid var(--border); background: white; font-size: 0.76rem; cursor: pointer; transition: all 0.15s; color: var(--text-muted); font-weight: 500; }
+    .chip:hover { border-color: var(--primary); color: var(--primary); }
+    .chip.active { background: var(--primary); border-color: var(--primary); color: white; }
+
+    /* 배당 토글 */
+    .toggle-row { display: flex; align-items: center; gap: 8px; }
+    .toggle { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; inset: 0; background: #cbd5e1; border-radius: 20px; transition: 0.2s; cursor: pointer; }
+    .toggle-slider:before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
+    input:checked + .toggle-slider { background: var(--success); }
+    input:checked + .toggle-slider:before { transform: translateX(16px); }
+    .toggle-label { font-size: 0.82rem; color: var(--text); font-weight: 500; }
+
+    input[type="text"], input[type="number"], select {
+      width: 100%; padding: 7px 10px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: 0.83rem; color: var(--text); background: white;
+      outline: none; transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: var(--primary); }
+
+    .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .period-row { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; align-items: center; }
+    .period-row select { padding: 7px 6px; font-size: 0.76rem; }
+
+    .btn-search { width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: background 0.15s; margin-top: 6px; }
+    .btn-search:hover { background: var(--primary-dark); }
+    .btn-reset { width: 100%; padding: 7px; background: transparent; color: var(--text-muted); border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s; margin-top: 6px; }
+    .btn-reset:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ── Results ── */
+    .results-panel { min-width: 0; }
+    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .stat-card { background: var(--card); border-radius: var(--radius); padding: 11px 12px; box-shadow: var(--shadow); text-align: center; }
+    .stat-card .sv { font-size: 1.25rem; font-weight: 800; color: var(--primary); }
+    .stat-card .sl { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+
+    .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 10px; flex-wrap: wrap; }
+    .result-count { font-size: 0.86rem; color: var(--text-muted); }
+    .result-count strong { color: var(--primary); font-size: 1rem; }
+    .sort-controls { display: flex; gap: 6px; align-items: center; }
+    .sort-controls label { font-size: 0.75rem; color: var(--text-muted); }
+    .sort-controls select { width: auto; padding: 5px 8px; font-size: 0.76rem; }
+
+    .status-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 50px 24px; text-align: center; color: var(--text-muted); }
+    .status-box .icon { font-size: 2rem; margin-bottom: 10px; }
+    .status-box p { font-size: 0.88rem; line-height: 1.7; }
+    .spinner { width: 36px; height: 36px; border: 4px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.75s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Table */
+    .etf-table-wrap { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow-x: auto; }
+    .etf-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 900px; }
+    .etf-table thead th { background: #f1f5f9; padding: 9px 11px; text-align: left; font-size: 0.69rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .etf-table thead th.num { text-align: right; }
+    .etf-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer; }
+    .etf-table tbody tr:last-child { border-bottom: none; }
+    .etf-table tbody tr:hover { background: #f8faff; }
+    .etf-table td { padding: 10px 11px; vertical-align: middle; }
+
+    .etf-name-cell { max-width: 200px; }
+    .etf-name { font-weight: 600; color: var(--text); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .etf-code { font-size: 0.7rem; color: var(--text-muted); margin-top: 1px; }
+
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 20px; font-size: 0.67rem; font-weight: 600; white-space: nowrap; margin: 1px; }
+    .badge-domestic { background: #dbeafe; color: #1d4ed8; }
+    .badge-overseas { background: #fef3c7; color: #92400e; }
+    .badge-주식 { background: #dcfce7; color: #166534; }
+    .badge-채권 { background: #f3e8ff; color: #6b21a8; }
+    .badge-원자재 { background: #fff7ed; color: #c2410c; }
+    .badge-부동산 { background: #fce7f3; color: #9d174d; }
+    .badge-혼합 { background: #e0f2fe; color: #0369a1; }
+    .badge-머니마켓 { background: #f0fdf4; color: #15803d; }
+    .badge-레버리지 { background: #fef9c3; color: #713f12; }
+    .badge-인버스 { background: #fee2e2; color: #991b1b; }
+    .badge-dividend { background: #fdf4ff; color: #7c3aed; }
+
+    .up { color: var(--danger); font-weight: 700; }
+    .down { color: var(--primary); font-weight: 700; }
+    .flat { color: var(--text-muted); }
+    .nr { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .btn-reload { padding: 5px 11px; background: white; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.76rem; cursor: pointer; color: var(--text-muted); transition: all 0.15s; }
+    .btn-reload:hover { border-color: var(--primary); color: var(--primary); }
+
+    .enriching-notice { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 7px 12px; font-size: 0.78rem; color: #1d4ed8; margin-bottom: 8px; display: none; align-items: center; gap: 8px; }
+    .mini-spinner { width: 13px; height: 13px; border: 2px solid #bfdbfe; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.75s linear infinite; flex-shrink: 0; }
+
+    .data-source { text-align: center; font-size: 0.7rem; color: var(--text-muted); margin-top: 12px; padding: 8px; }
+    .data-source a { color: var(--primary); text-decoration: none; }
+    .data-source a:hover { text-decoration: underline; }
+
+    .period-label { font-size: 0.73rem; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+
+    .return-col-header { display: flex; align-items: center; gap: 4px; }
+
+    /* ── 유튜브 채널 배너 ── */
+    .yt-banner {
+      background: linear-gradient(90deg, #ff0000 0%, #cc0000 50%, #900000 100%);
+      color: white; text-align: center; padding: 10px 16px;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      flex-wrap: wrap; position: relative;
+    }
+    .yt-banner .yt-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .yt-banner .yt-text { font-size: 0.88rem; line-height: 1.4; }
+    .yt-banner .yt-text strong { font-size: 1rem; font-weight: 800; letter-spacing: -0.3px; }
+    .yt-banner a.yt-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: white; color: #cc0000; font-weight: 800; font-size: 0.8rem;
+      padding: 5px 13px; border-radius: 20px; text-decoration: none;
+      transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .yt-banner a.yt-link:hover { background: #fff3f3; transform: scale(1.04); }
+
+    /* 분배주기 뱃지 */
+    .badge-월배당 { background: #fdf4ff; color: #7c3aed; }
+    .badge-분기배당 { background: #f0fdf4; color: #166534; }
+    .badge-배당형 { background: #fff7ed; color: #9a3412; }
+  </style>
+</head>
+<body>
+
+<!-- 유튜브 채널 홍보 배너 -->
+<div class="yt-banner">
+  <span class="yt-icon">▶</span>
+  <div class="yt-text">
+    <strong>보통사람의 재테크 사관학교</strong> 채널에서 제작하였습니다<br/>
+    <span style="font-size:0.78rem; opacity:0.9;">유튜브에서 쉽고 실용적인 재테크 정보를 만나보세요!</span>
+  </div>
+  <a class="yt-link" href="https://youtube.com/channel/UCPVflo0Am24gdu8jpvrTJ3w?si=E6DuX5iPw5p7igCl" target="_blank" rel="noopener">
+    ▶ 채널 바로가기
+  </a>
+</div>
+
+<header>
+  <h1>📊 ETF Picker</h1>
+  <p>네이버 금융 실시간 데이터 기반 · 조건에 맞는 ETF를 찾아보세요</p>
+</header>
+
+<div class="container">
+
+  <!-- ── 필터 패널 ── -->
+  <aside class="filter-panel">
+    <h2>🔍 필터 설정</h2>
+
+    <div class="filter-group">
+      <label>투자 지역</label>
+      <div class="chip-group" id="chips-region">
+        <button class="chip active" data-value="">전체</button>
+        <button class="chip" data-value="국내">국내</button>
+        <button class="chip" data-value="해외">해외</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>자산 유형</label>
+      <div class="chip-group" id="chips-asset">
+        <button class="chip active" data-value="">전체</button>
+        <button class="chip" data-value="주식">주식</button>
+        <button class="chip" data-value="채권">채권</button>
+        <button class="chip" data-value="원자재">원자재</button>
+        <button class="chip" data-value="부동산">부동산</button>
+        <button class="chip" data-value="혼합">혼합</button>
+        <button class="chip" data-value="머니마켓">머니마켓</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>상품 유형</label>
+      <div class="chip-group" id="chips-product">
+        <button class="chip active" data-value="">전체</button>
+        <button class="chip" data-value="일반">일반</button>
+        <button class="chip" data-value="레버리지">레버리지</button>
+        <button class="chip" data-value="인버스">인버스</button>
+      </div>
+    </div>
+
+    <!-- ① 배당률 / 분배형 ETF 필터 -->
+    <div class="filter-group">
+      <label>💰 배당률 / 분배 유형 필터</label>
+      <div class="chip-group" id="chips-distfreq" style="margin-bottom:8px;">
+        <button class="chip active" data-value="">전체</button>
+        <button class="chip" data-value="배당형전체">배당형 전체</button>
+        <button class="chip" data-value="월배당">월배당</button>
+        <button class="chip" data-value="분기배당">분기배당</button>
+        <button class="chip" data-value="배당형">기타배당</button>
+      </div>
+      <div style="font-size:0.69rem; color:var(--text-muted); line-height:1.5;">
+        월배당: 커버드콜·월배당 포함 ETF<br/>
+        분기배당: 분기 분배 ETF<br/>
+        기타배당: 배당·인컴 포함 일반형
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>상품명 검색</label>
+      <input type="text" id="name-keyword" placeholder="예: 나스닥, S&P500, 반도체..." />
+    </div>
+
+    <div class="filter-group">
+      <label>추종지수 / 키워드</label>
+      <input type="text" id="index-keyword" placeholder="예: KOSPI, S&P, 국채, 금..." />
+    </div>
+
+    <div class="filter-group">
+      <label>운용사</label>
+      <select id="issuer-select">
+        <option value="">전체 운용사</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>순자산 규모 최소 (억원)</label>
+      <input type="number" id="min-net-asset" placeholder="예: 500" min="0" step="100" />
+    </div>
+
+    <!-- ② 수익률 기간 선택 + 범위 -->
+    <div class="filter-group">
+      <label>수익률 필터</label>
+      <div class="period-row" style="margin-bottom:6px;">
+        <span class="period-label">기간:</span>
+        <select id="return-period" onchange="updateReturnPeriodLabel(); search()">
+          <option value="1m">1개월</option>
+          <option value="3m" selected>3개월</option>
+          <option value="6m">6개월</option>
+          <option value="1y">1년</option>
+        </select>
+        <span style="font-size:0.7rem; color:var(--text-muted);">수익률 기준</span>
+      </div>
+      <div class="input-row">
+        <input type="number" id="min-return" placeholder="최소 %" step="1" />
+        <input type="number" id="max-return" placeholder="최대 %" step="1" />
+      </div>
+      <div id="period-data-note" style="font-size:0.68rem; color:var(--warning); margin-top:3px; display:none;">
+        ⚠️ 1m·6m·1y 수익률은 상세 로딩 완료 후 적용됩니다
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>당일 등락률 범위 (%)</label>
+      <div class="input-row">
+        <input type="number" id="min-change" placeholder="최소" step="0.1" />
+        <input type="number" id="max-change" placeholder="최대" step="0.1" />
+      </div>
+    </div>
+
+    <button class="btn-search" onclick="search()">🔍 ETF 검색</button>
+    <button class="btn-reset" onclick="resetFilters()">↺ 초기화</button>
+  </aside>
+
+  <!-- ── 결과 패널 ── -->
+  <main class="results-panel">
+
+    <!-- 통계 바 -->
+    <div class="stats-bar" id="stats-bar" style="display:none;">
+      <div class="stat-card"><div class="sv" id="stat-total">-</div><div class="sl">검색 결과</div></div>
+      <div class="stat-card"><div class="sv" id="stat-avg-change">-</div><div class="sl">평균 등락률</div></div>
+      <div class="stat-card"><div class="sv" id="stat-rising" style="color:var(--danger)">-</div><div class="sl">상승 종목</div></div>
+      <div class="stat-card"><div class="sv" id="stat-falling" style="color:var(--primary)">-</div><div class="sl">하락 종목</div></div>
+      <div class="stat-card"><div class="sv" id="stat-avg-ret">-</div><div class="sl" id="stat-ret-label">평균 3개월 수익률</div></div>
+      <div class="stat-card"><div class="sv" id="stat-dividend" style="color:var(--purple)">-</div><div class="sl">배당형 ETF</div></div>
+    </div>
+
+    <!-- 상세 로딩 안내 -->
+    <div class="enriching-notice" id="enriching-notice">
+      <div class="mini-spinner"></div>
+      <span>운용사·추종지수·기간별 수익률 등 상세 정보를 백그라운드에서 불러오는 중입니다. 잠시 후 자동으로 업데이트됩니다.</span>
+    </div>
+
+    <!-- 결과 헤더 -->
+    <div class="result-header" id="result-header" style="display:none;">
+      <div class="result-count">총 <strong id="result-count">0</strong>개 ETF</div>
+      <div class="sort-controls">
+        <label>정렬:</label>
+        <select id="sort-by" onchange="search()">
+          <option value="net_asset">시가총액</option>
+          <option value="return">수익률</option>
+          <option value="change_rate">등락률</option>
+          <option value="volume">거래량</option>
+          <option value="price">현재가</option>
+        </select>
+        <select id="sort-order" onchange="search()">
+          <option value="desc">내림차순</option>
+          <option value="asc">오름차순</option>
+        </select>
+        <button class="btn-reload" onclick="reloadData()">⟳ 새로고침</button>
+      </div>
+    </div>
+
+    <!-- 결과 -->
+    <div id="results-area">
+      <div class="status-box">
+        <div class="spinner"></div>
+        <p id="init-msg">KRX · 네이버 금융에서 ETF 데이터를 불러오는 중...<br/>약 1~2분 소요됩니다.</p>
+      </div>
+    </div>
+
+    <div class="data-source">
+      데이터 출처: <a href="https://finance.naver.com" target="_blank">네이버 금융</a>
+      · <a href="https://data.krx.co.kr" target="_blank">KRX</a>
+      · <a href="https://www.funetf.co.kr" target="_blank">FunETF</a>
+      &nbsp;|&nbsp; 본 정보는 투자 권유가 아닙니다.
+    </div>
+  </main>
+</div>
+
+<script>
+  let currentPeriod = '3m';
+
+  window.addEventListener('DOMContentLoaded', () => {
+    initChips();
+    pollStatus();
+    updateReturnPeriodLabel();
+  });
+
+  function initChips() {
+    ['chips-region', 'chips-asset', 'chips-product', 'chips-distfreq'].forEach(groupId => {
+      document.getElementById(groupId).querySelectorAll('.chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          document.getElementById(groupId).querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          search();
+        });
+      });
+    });
+  }
+
+  function updateReturnPeriodLabel() {
+    const period = document.getElementById('return-period').value;
+    currentPeriod = period;
+    const labels = { '1m': '1개월', '3m': '3개월', '6m': '6개월', '1y': '1년' };
+    document.getElementById('stat-ret-label').textContent = `평균 ${labels[period]} 수익률`;
+    // 1m/6m/1y는 상세 로딩 후 사용 가능 안내
+    const note = document.getElementById('period-data-note');
+    note.style.display = (period === '3m') ? 'none' : 'block';
+  }
+
+  async function pollStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      if (data.error && !data.ready) { showError(data.error); return; }
+      if (data.ready) {
+        loadIssuers();
+        if (data.enriching) document.getElementById('enriching-notice').style.display = 'flex';
+        search();
+        if (data.enriching) setTimeout(checkEnrichStatus, 6000);
+        return;
+      }
+      setTimeout(pollStatus, 2000);
+    } catch (e) { setTimeout(pollStatus, 3000); }
+  }
+
+  async function checkEnrichStatus() {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    if (!data.enriching) {
+      document.getElementById('enriching-notice').style.display = 'none';
+      search();
+    } else {
+      setTimeout(checkEnrichStatus, 6000);
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('results-area').innerHTML = `
+      <div class="status-box"><div class="icon">⚠️</div>
+      <p>${msg}<br/><br/><button class="btn-reload" onclick="reloadData()">다시 시도</button></p></div>`;
+  }
+
+  async function loadIssuers() {
+    try {
+      const res = await fetch('/api/issuers');
+      const data = await res.json();
+      const sel = document.getElementById('issuer-select');
+      while (sel.options.length > 1) sel.remove(1);
+      data.issuers.forEach(issuer => {
+        const opt = document.createElement('option');
+        opt.value = issuer; opt.textContent = issuer;
+        sel.appendChild(opt);
+      });
+    } catch (e) {}
+  }
+
+  async function search() {
+    const filters = buildFilters();
+    document.getElementById('results-area').innerHTML =
+      '<div class="status-box"><div class="spinner"></div><p>검색 중...</p></div>';
+    try {
+      const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(filters),
+      });
+      const data = await res.json();
+      if (data.loading) {
+        document.getElementById('results-area').innerHTML =
+          '<div class="status-box"><div class="spinner"></div><p>데이터 로딩 중...</p></div>';
+        setTimeout(search, 2500); return;
+      }
+      if (data.error) { showError(data.error); return; }
+      renderStats(data.stats, data.total);
+      renderResults(data.etfs, data.total, filters.return_period);
+    } catch (e) { showError('서버 오류: ' + e.message); }
+  }
+
+  function buildFilters() {
+    const getChip = id => document.querySelector(`#${id} .chip.active`)?.dataset.value || '';
+    const getVal = id => document.getElementById(id).value.trim();
+    const getNum = id => { const v = getVal(id); return v === '' ? null : parseFloat(v); };
+    return {
+      region: getChip('chips-region'),
+      asset_type: getChip('chips-asset'),
+      product_type: getChip('chips-product'),
+      dist_freq: getChip('chips-distfreq'),
+      dividend_only: false,
+      name_keyword: getVal('name-keyword'),
+      index_keyword: getVal('index-keyword'),
+      issuer: getVal('issuer-select'),
+      min_net_asset: getNum('min-net-asset'),
+      return_period: getVal('return-period') || '3m',
+      min_return: getNum('min-return'),
+      max_return: getNum('max-return'),
+      min_change_rate: getNum('min-change'),
+      max_change_rate: getNum('max-change'),
+      sort_by: document.getElementById('sort-by')?.value || 'net_asset',
+      sort_order: document.getElementById('sort-order')?.value || 'desc',
+      limit: 200,
+    };
+  }
+
+  const PERIOD_LABELS = { '1m': '1개월', '3m': '3개월', '6m': '6개월', '1y': '1년' };
+
+  function renderStats(stats, total) {
+    if (!stats || total === 0) { document.getElementById('stats-bar').style.display = 'none'; return; }
+    document.getElementById('stats-bar').style.display = 'grid';
+    document.getElementById('stat-total').textContent = total.toLocaleString() + '개';
+
+    const ac = stats.avg_change_rate;
+    const acEl = document.getElementById('stat-avg-change');
+    acEl.textContent = (ac >= 0 ? '+' : '') + ac + '%';
+    acEl.style.color = ac > 0 ? 'var(--danger)' : ac < 0 ? 'var(--primary)' : 'var(--text-muted)';
+
+    document.getElementById('stat-rising').textContent = stats.rising + '개';
+    document.getElementById('stat-falling').textContent = stats.falling + '개';
+
+    const ar = stats.avg_return;
+    const arEl = document.getElementById('stat-avg-ret');
+    arEl.textContent = (ar >= 0 ? '+' : '') + ar + '%';
+    arEl.style.color = ar > 0 ? 'var(--danger)' : ar < 0 ? 'var(--primary)' : 'var(--text-muted)';
+
+    document.getElementById('stat-ret-label').textContent = `평균 ${PERIOD_LABELS[stats.return_period] || '3개월'} 수익률`;
+    document.getElementById('stat-dividend').textContent = stats.dividend_count + '개';
+  }
+
+  function renderResults(etfs, total, returnPeriod) {
+    const periodLabel = PERIOD_LABELS[returnPeriod] || '3개월';
+    document.getElementById('result-header').style.display = 'flex';
+    document.getElementById('result-count').textContent = total.toLocaleString();
+
+    if (etfs.length === 0) {
+      document.getElementById('results-area').innerHTML =
+        '<div class="status-box"><div class="icon">🔎</div><p>조건에 맞는 ETF가 없습니다.<br/>필터를 변경해 보세요.</p></div>';
+      return;
+    }
+
+    // 수익률 필드 선택
+    const retFieldMap = { '1m':'return_1m', '3m':'return_3m', '6m':'return_6m', '1y':'return_1y' };
+    const retField = retFieldMap[returnPeriod] || 'return_3m';
+
+    const rows = etfs.map(e => {
+      const cc = e.change_rate > 0 ? 'up' : e.change_rate < 0 ? 'down' : 'flat';
+      const cs = e.change_rate > 0 ? '+' : '';
+
+      const retVal = e[retField];
+      const rc = retVal > 0 ? 'up' : retVal < 0 ? 'down' : 'flat';
+      const rs = retVal > 0 ? '+' : '';
+      const retStr = retVal !== null && retVal !== undefined ? `${rs}${retVal}%` : '<span style="color:var(--text-muted);font-size:0.75rem">-</span>';
+
+      const regionBadge = e.region === '해외'
+        ? '<span class="badge badge-overseas">해외</span>'
+        : '<span class="badge badge-domestic">국내</span>';
+      const assetBadge = `<span class="badge badge-${e.asset_type}">${e.asset_type}</span>`;
+      const typeBadge = e.product_type !== '일반' ? `<span class="badge badge-${e.product_type}">${e.product_type}</span>` : '';
+      const distFreqBadgeMap = {
+        '월배당': '<span class="badge badge-월배당">💸월배당</span>',
+        '분기배당': '<span class="badge badge-분기배당">💰분기배당</span>',
+        '배당형': '<span class="badge badge-배당형">💰배당</span>',
+      };
+      const divBadge = e.dist_freq && e.dist_freq !== '비배당' ? (distFreqBadgeMap[e.dist_freq] || '<span class="badge badge-dividend">💰배당</span>') : '';
+
+      const issuerStr = e.issuer || '<span style="color:var(--text-muted)">-</span>';
+      const idxStr = e.index_name
+        ? `<span title="${e.index_name}">${e.index_name.length > 20 ? e.index_name.substring(0,20)+'…' : e.index_name}</span>`
+        : '<span style="color:var(--text-muted)">-</span>';
+
+      return `<tr onclick="window.open('https://finance.naver.com/item/main.naver?code=${e.code}','_blank')">
+        <td class="etf-name-cell">
+          <div class="etf-name">${e.name}</div>
+          <div class="etf-code">${e.code}</div>
+        </td>
+        <td>${regionBadge}${assetBadge}${typeBadge}${divBadge}</td>
+        <td class="nr">${e.current_price > 0 ? e.current_price.toLocaleString() : '-'}</td>
+        <td class="nr"><span class="${cc}">${cs}${e.change_rate}%</span></td>
+        <td class="nr"><span class="${rc}">${retStr}</span></td>
+        <td style="font-size:0.78rem;max-width:150px">${idxStr}</td>
+        <td class="nr" style="font-size:0.8rem">${e.net_asset_billion > 0 ? e.net_asset_billion.toLocaleString() + '억' : '-'}</td>
+        <td style="font-size:0.78rem">${issuerStr}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('results-area').innerHTML = `
+      <div class="etf-table-wrap">
+        <table class="etf-table">
+          <thead><tr>
+            <th>ETF 상품명</th>
+            <th>분류</th>
+            <th class="num">현재가(원)</th>
+            <th class="num">등락률</th>
+            <th class="num">${periodLabel} 수익률</th>
+            <th>추종 지수</th>
+            <th class="num">시가총액</th>
+            <th>운용사</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function resetFilters() {
+    ['chips-region', 'chips-asset', 'chips-product', 'chips-distfreq'].forEach(id => {
+      document.getElementById(id).querySelectorAll('.chip').forEach((c, i) => c.classList.toggle('active', i === 0));
+    });
+    ['name-keyword','index-keyword','min-net-asset','min-return','max-return','min-change','max-change'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('issuer-select').value = '';
+    document.getElementById('return-period').value = '3m';
+    document.getElementById('sort-by').value = 'net_asset';
+    document.getElementById('sort-order').value = 'desc';
+    updateReturnPeriodLabel();
+    search();
+  }
+
+  async function reloadData() {
+    document.getElementById('results-area').innerHTML =
+      '<div class="status-box"><div class="spinner"></div><p>최신 데이터를 불러오는 중...</p></div>';
+    document.getElementById('enriching-notice').style.display = 'none';
+    await fetch('/api/reload', { method: 'POST' });
+    setTimeout(pollStatus, 1500);
+  }
+</script>
+</body>
+</html>
