@@ -592,8 +592,8 @@
         ? `<span style="font-size:0.76rem;color:var(--text-muted)">${e.expense_ratio}%</span>`
         : '<span style="color:var(--text-muted);font-size:0.72rem">-</span>';
 
-      // 네이버 금융 상세 링크 (로그인 불필요, 직접 접근 가능)
-      const etfcheckLink = `<a href="https://finance.naver.com/item/main.naver?code=${e.code}" target="_blank" onclick="event.stopPropagation()" style="font-size:0.68rem;color:var(--primary);white-space:nowrap">네이버↗</a>`;
+      // 네이버 증권 모바일 — 해당 ETF 직접 링크
+      const etfcheckLink = `<a href="https://m.stock.naver.com/domestic/stock/${e.code}" target="_blank" onclick="event.stopPropagation()" style="font-size:0.68rem;color:var(--primary);white-space:nowrap" title="네이버 증권에서 ${e.name} 상세보기">📱상세↗</a>`;
 
       return `<tr onclick="window.open('https://finance.naver.com/item/main.naver?code=${e.code}','_blank')">
         <td class="etf-name-cell">
