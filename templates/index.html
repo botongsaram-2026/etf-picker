@@ -300,24 +300,12 @@
       <input type="number" id="min-net-asset" placeholder="예: 500" min="0" step="100" />
     </div>
 
-    <!-- 수익률 기간 + 범위 -->
+    <!-- 수익률 범위 (3개월 고정) -->
     <div class="filter-group">
-      <label>수익률 필터</label>
-      <div class="period-row" style="margin-bottom:6px;">
-        <span class="period-label">기간:</span>
-        <select id="return-period" onchange="updateReturnPeriodLabel(); search()">
-          <option value="1m">1개월</option>
-          <option value="3m" selected>3개월</option>
-          <option value="6m">6개월</option>
-          <option value="1y">1년</option>
-        </select>
-      </div>
+      <label>3개월 수익률 범위 (%)</label>
       <div class="input-row">
         <input type="number" id="min-return" placeholder="최소 %" step="1" />
         <input type="number" id="max-return" placeholder="최대 %" step="1" />
-      </div>
-      <div id="period-data-note" style="font-size:0.66rem; color:var(--warning); margin-top:3px; display:none;">
-        ⚠️ 1m·6m·1y는 상세 로딩 완료 후 표시됩니다
       </div>
     </div>
 
@@ -423,11 +411,7 @@
   }
 
   function updateReturnPeriodLabel() {
-    const period = document.getElementById('return-period').value;
-    currentPeriod = period;
-    const labels = { '1m':'1개월','3m':'3개월','6m':'6개월','1y':'1년' };
-    document.getElementById('stat-ret-label').textContent = `평균 ${labels[period]} 수익률`;
-    document.getElementById('period-data-note').style.display = period === '3m' ? 'none' : 'block';
+    // 3개월 수익률 고정
   }
 
   async function pollStatus() {
@@ -513,7 +497,7 @@
       index_keyword: getVal('index-keyword'),
       issuer: getVal('issuer-select'),
       min_net_asset: getNum('min-net-asset'),
-      return_period: getVal('return-period') || '3m',
+      return_period: '3m',
       min_return: getNum('min-return'),
       max_return: getNum('max-return'),
       min_change_rate: getNum('min-change'),
@@ -524,7 +508,7 @@
     };
   }
 
-  const PERIOD_LABELS = { '1m':'1개월','3m':'3개월','6m':'6개월','1y':'1년' };
+  const PERIOD_LABELS = { '3m':'3개월' };
 
   function renderStats(stats, total) {
     if (!stats || total === 0) { document.getElementById('stats-bar').style.display = 'none'; return; }
@@ -540,12 +524,12 @@
     const arEl = document.getElementById('stat-avg-ret');
     arEl.textContent = (ar >= 0 ? '+' : '') + ar + '%';
     arEl.style.color = ar > 0 ? 'var(--danger)' : ar < 0 ? 'var(--primary)' : 'var(--text-muted)';
-    document.getElementById('stat-ret-label').textContent = `평균 ${PERIOD_LABELS[stats.return_period] || '3개월'} 수익률`;
+    document.getElementById('stat-ret-label').textContent = '평균 3개월 수익률';
     document.getElementById('stat-dividend').textContent = stats.dividend_count + '개';
   }
 
   function renderResults(etfs, total, returnPeriod) {
-    const periodLabel = PERIOD_LABELS[returnPeriod] || '3개월';
+    const periodLabel = '3개월';
     document.getElementById('result-header').style.display = 'flex';
     document.getElementById('result-count').textContent = total.toLocaleString();
 
@@ -555,8 +539,7 @@
       return;
     }
 
-    const retFieldMap = { '1m':'return_1m','3m':'return_3m','6m':'return_6m','1y':'return_1y' };
-    const retField = retFieldMap[returnPeriod] || 'return_3m';
+    const retField = 'return_3m';
 
     const rows = etfs.map(e => {
       const cc = e.change_rate > 0 ? 'up' : e.change_rate < 0 ? 'down' : 'flat';
@@ -636,7 +619,6 @@
       document.getElementById(id).value = '';
     });
     document.getElementById('issuer-select').value = '';
-    document.getElementById('return-period').value = '3m';
     document.getElementById('sort-by').value = 'net_asset';
     document.getElementById('sort-order').value = 'desc';
     updateReturnPeriodLabel();
