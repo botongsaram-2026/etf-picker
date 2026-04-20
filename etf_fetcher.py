@@ -174,7 +174,7 @@ def get_naver_etf_detail(code: str) -> dict:
 
 
 def _enrich_from_wisereport(code: str, result: dict, re_mod, json_mod) -> None:
-    """WiseReport iframe 페이지에서 보수율·ETF유형 보완"""
+    """WiseReport iframe 페이지에서 보수율·ETF유형·기간별수익률 보완"""
     wr_url = f"https://navercomp.wisereport.co.kr/v2/ETF/index.aspx?cmp_cd={code}&target=etf"
     wr_headers = {**NAVER_HEADERS, "Referer": "https://finance.naver.com/"}
     try:
@@ -183,20 +183,31 @@ def _enrich_from_wisereport(code: str, result: dict, re_mod, json_mod) -> None:
         wr_soup = BeautifulSoup(wr.text, "lxml")
         for script in wr_soup.find_all("script"):
             content = script.string or ""
-            if "summary_data" not in content:
-                continue
-            # TOT_PAY → 연간 총보수율
-            m_pay = re_mod.search(r'"TOT_PAY"\s*:\s*"?([0-9.]+)"?', content)
-            if m_pay:
-                try:
-                    result["expense_ratio"] = float(m_pay.group(1))
-                except ValueError:
-                    pass
-            # ETF_TYP_SVC_NM → ETF 서비스 유형
-            m_typ = re_mod.search(r'"ETF_TYP_SVC_NM"\s*:\s*"([^"]*)"', content)
-            if m_typ:
-                result["etf_type_svc"] = m_typ.group(1)
-            break
+            # summary_data → 보수율 + ETF 유형
+            if "summary_data" in content:
+                m_pay = re_mod.search(r'"TOT_PAY"\s*:\s*"?([0-9.]+)"?', content)
+                if m_pay:
+                    try:
+                        result["expense_ratio"] = float(m_pay.group(1))
+                    except ValueError:
+                        pass
+                m_typ = re_mod.search(r'"ETF_TYP_SVC_NM"\s*:\s*"([^"]*)"', content)
+                if m_typ:
+                    result["etf_type_svc"] = m_typ.group(1)
+            # status_data → 기간별 수익률 (ERN1·ERN3·ERN6·ERN12)
+            if "status_data" in content:
+                for ern_key, result_key in (
+                    ("ERN1", "return_1m"),
+                    ("ERN3", "return_3m_detail"),
+                    ("ERN6", "return_6m"),
+                    ("ERN12", "return_1y"),
+                ):
+                    m = re_mod.search(rf'"{ern_key}"\s*:\s*"?(-?[0-9.]+)"?', content)
+                    if m:
+                        try:
+                            result[result_key] = float(m.group(1))
+                        except ValueError:
+                            pass
     except Exception:
         pass
 
