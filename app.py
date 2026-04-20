@@ -87,6 +87,16 @@ def _load_etf_data():
                 etf["return_6m"] = d["return_6m"]
             if d.get("return_1y") is not None:
                 etf["return_1y"] = d["return_1y"]
+            if d.get("expense_ratio") is not None:
+                etf["expense_ratio"] = d["expense_ratio"]
+            if d.get("etf_type_svc"):
+                etf["etf_type_svc"] = d["etf_type_svc"]
+                # WiseReport 유형에서 분배 주기 보완
+                typ = d["etf_type_svc"]
+                if etf.get("dist_freq") == "배당형" and "파생" in typ:
+                    etf["dist_freq"] = "월배당"  # 파생상품형 배당ETF → 커버드콜 월배당
+                if "배당" in typ and not etf.get("is_dividend"):
+                    etf["is_dividend"] = True
 
         _cache["etfs"] = etfs
         _cache["issuers"] = get_issuer_list(etfs)

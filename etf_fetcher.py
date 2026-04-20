@@ -24,21 +24,30 @@ NAVER_HEADERS = {
     "Accept-Language": "ko-KR,ko;q=0.9",
 }
 
-# 배당/분배형 ETF 키워드
+# 배당/분배형 ETF 키워드 (is_dividend=True 분류 기준)
 DIVIDEND_KEYWORDS = [
     "배당", "고배당", "배당성장", "인컴", "분배",
     "dividend", "DIVD", "SCHD", "income", "INCOME",
     "다우존스배당", "다우배당", "배당귀족", "배당킹",
     "커버드콜", "coveredcall", "COVERED", "프리미엄",
     "월배당", "분기배당", "연배당",
+    "위클리", "타겟커버드콜", "컨벡스", "콜매도",
 ]
 
 # 월배당 ETF 키워드 (월간 분배금 지급)
-MONTHLY_DIV_KEYWORDS = ["월배당", "Monthly", "매월", "월분배", "월지급"]
+MONTHLY_DIV_KEYWORDS = [
+    "월배당", "Monthly", "매월", "월분배", "월지급",
+    "위클리",           # 위클리 커버드콜 → 월분배
+]
 # 분기배당 ETF 키워드
 QUARTERLY_DIV_KEYWORDS = ["분기배당", "Quarterly", "매분기", "분기분배"]
-# 커버드콜 계열 - 보통 월배당
-COVERED_CALL_KEYWORDS = ["커버드콜", "CoveredCall", "covered", "프리미엄", "CC"]
+# 커버드콜/파생 계열 - 보통 월배당
+COVERED_CALL_KEYWORDS = [
+    "커버드콜", "CoveredCall", "컨벡스", "타겟커버드콜",
+    "콜매도", "프리미엄",
+    # 해외 커버드콜 (QYLD 계열 등)
+    "QYLD", "XYLD", "RYLD",
+]
 
 # ETF 브랜드 → 운용사 매핑
 BRAND_TO_ISSUER = {
@@ -95,7 +104,8 @@ def get_naver_etf_list() -> list[dict]:
 
 
 def get_naver_etf_detail(code: str) -> dict:
-    """네이버 금융 개별 ETF 상세 페이지 스크래핑 (기초지수, 운용사, 기간별 수익률)"""
+    """네이버 금융 + WiseReport 스크래핑 (기초지수, 운용사, 수익률, 보수율, ETF 타입)"""
+    import re, json as _json
     url = f"https://finance.naver.com/item/coinfo.naver?code={code}&target=etf"
     result = {
         "code": code,
@@ -103,9 +113,12 @@ def get_naver_etf_detail(code: str) -> dict:
         "issuer": "",
         "listed_date": "",
         "return_1m": None,
-        "return_3m_detail": None,  # 3m (상세페이지 기준, bulk API와 중복)
+        "return_3m_detail": None,
         "return_6m": None,
         "return_1y": None,
+        "expense_ratio": None,   # 연간 총보수율(%)
+        "etf_type_svc": "",      # WiseReport ETF 유형 (예: 국내주식형, 파생상품)
+        "dist_freq_detail": "",  # WiseReport 기반 보완 분배 주기
     }
     try:
         resp = requests.get(url, headers=NAVER_HEADERS, timeout=10)
@@ -126,14 +139,14 @@ def get_naver_etf_detail(code: str) -> dict:
                     elif "상장일" in label:
                         result["listed_date"] = value
 
-        # Table 3: 자산운용사 (운용사가 없을 때 보완)
+        # Table 3: 자산운용사 보완
         if not result["issuer"] and len(tables) > 3:
             for row in tables[3].find_all("tr"):
                 cells = [c.get_text(strip=True) for c in row.find_all(["th", "td"])]
                 if len(cells) >= 2 and "자산운용사" in cells[0]:
                     result["issuer"] = cells[1].replace("(주)", "").strip()
 
-        # Table 5: 기간별 수익률 (1개월, 3개월, 6개월, 1년)
+        # Table 5: 기간별 수익률
         if len(tables) > 5:
             return_labels = {
                 "1개월": "return_1m",
@@ -151,9 +164,41 @@ def get_naver_etf_detail(code: str) -> dict:
                                 result[field] = float(val)
                             except ValueError:
                                 pass
+
+        # WiseReport 스크래핑: 보수율 + ETF 유형
+        _enrich_from_wisereport(code, result, re, _json)
+
     except Exception as e:
         logger.debug(f"ETF 상세 조회 실패 ({code}): {e}")
     return result
+
+
+def _enrich_from_wisereport(code: str, result: dict, re_mod, json_mod) -> None:
+    """WiseReport iframe 페이지에서 보수율·ETF유형 보완"""
+    wr_url = f"https://navercomp.wisereport.co.kr/v2/ETF/index.aspx?cmp_cd={code}&target=etf"
+    wr_headers = {**NAVER_HEADERS, "Referer": "https://finance.naver.com/"}
+    try:
+        wr = requests.get(wr_url, headers=wr_headers, timeout=8)
+        wr.raise_for_status()
+        wr_soup = BeautifulSoup(wr.text, "lxml")
+        for script in wr_soup.find_all("script"):
+            content = script.string or ""
+            if "summary_data" not in content:
+                continue
+            # TOT_PAY → 연간 총보수율
+            m_pay = re_mod.search(r'"TOT_PAY"\s*:\s*"?([0-9.]+)"?', content)
+            if m_pay:
+                try:
+                    result["expense_ratio"] = float(m_pay.group(1))
+                except ValueError:
+                    pass
+            # ETF_TYP_SVC_NM → ETF 서비스 유형
+            m_typ = re_mod.search(r'"ETF_TYP_SVC_NM"\s*:\s*"([^"]*)"', content)
+            if m_typ:
+                result["etf_type_svc"] = m_typ.group(1)
+            break
+    except Exception:
+        pass
 
 
 def get_all_etf_data(enrich_details: bool = True, max_workers: int = 20) -> list[dict]:
@@ -263,7 +308,8 @@ def _process_basic(item: dict) -> Optional[dict]:
             "is_dividend": is_dividend,
             "dist_freq": dist_freq,
             "tab_code": tab_code,
-            "total_fee": 0.0,
+            "expense_ratio": None,   # 연간 총보수율 (2단계 스크래핑 후 채워짐)
+            "etf_type_svc": "",
         }
     except Exception as e:
         logger.debug(f"기본 데이터 처리 오류: {e}")
