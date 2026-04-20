@@ -104,9 +104,10 @@ def get_naver_etf_list() -> list[dict]:
 
 
 def get_naver_etf_detail(code: str) -> dict:
-    """네이버 금융 + WiseReport 스크래핑 (기초지수, 운용사, 수익률, 보수율, ETF 타입)"""
-    import re, json as _json
-    url = f"https://finance.naver.com/item/coinfo.naver?code={code}&target=etf"
+    """WiseReport 단일 요청으로 기초지수·운용사·수익률·보수율·ETF타입 수집
+    (기존 coinfo.naver 스크래핑 제거 → 요청 수 50% 절감)
+    """
+    import re as _re, json as _json
     result = {
         "code": code,
         "index_name": "",
@@ -116,100 +117,66 @@ def get_naver_etf_detail(code: str) -> dict:
         "return_3m_detail": None,
         "return_6m": None,
         "return_1y": None,
-        "expense_ratio": None,   # 연간 총보수율(%)
-        "etf_type_svc": "",      # WiseReport ETF 유형 (예: 국내주식형, 파생상품)
-        "dist_freq_detail": "",  # WiseReport 기반 보완 분배 주기
+        "expense_ratio": None,
+        "etf_type_svc": "",
+        "dist_freq_detail": "",
     }
-    try:
-        resp = requests.get(url, headers=NAVER_HEADERS, timeout=10)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "lxml")
-        tables = soup.find_all("table")
-
-        # Table 2: 기초지수, 운용사, 상장일
-        if len(tables) > 2:
-            for row in tables[2].find_all("tr"):
-                cells = [c.get_text(strip=True) for c in row.find_all(["th", "td"])]
-                if len(cells) >= 2:
-                    label, value = cells[0], cells[1]
-                    if "기초지수" in label or "추종지수" in label:
-                        result["index_name"] = value
-                    elif "운용사" in label:
-                        result["issuer"] = value.split(",")[0].replace("(주)", "").strip()
-                    elif "상장일" in label:
-                        result["listed_date"] = value
-
-        # Table 3: 자산운용사 보완
-        if not result["issuer"] and len(tables) > 3:
-            for row in tables[3].find_all("tr"):
-                cells = [c.get_text(strip=True) for c in row.find_all(["th", "td"])]
-                if len(cells) >= 2 and "자산운용사" in cells[0]:
-                    result["issuer"] = cells[1].replace("(주)", "").strip()
-
-        # Table 5: 기간별 수익률
-        if len(tables) > 5:
-            return_labels = {
-                "1개월": "return_1m",
-                "3개월": "return_3m_detail",
-                "6개월": "return_6m",
-                "1년": "return_1y",
-            }
-            for row in tables[5].find_all("tr"):
-                cells = [c.get_text(strip=True) for c in row.find_all(["th", "td"])]
-                if len(cells) >= 2:
-                    for label_text, field in return_labels.items():
-                        if label_text in cells[0]:
-                            try:
-                                val = cells[1].replace("+", "").replace("%", "").strip()
-                                result[field] = float(val)
-                            except ValueError:
-                                pass
-
-        # WiseReport 스크래핑: 보수율 + ETF 유형
-        _enrich_from_wisereport(code, result, re, _json)
-
-    except Exception as e:
-        logger.debug(f"ETF 상세 조회 실패 ({code}): {e}")
-    return result
-
-
-def _enrich_from_wisereport(code: str, result: dict, re_mod, json_mod) -> None:
-    """WiseReport iframe 페이지에서 보수율·ETF유형·기간별수익률 보완"""
     wr_url = f"https://navercomp.wisereport.co.kr/v2/ETF/index.aspx?cmp_cd={code}&target=etf"
     wr_headers = {**NAVER_HEADERS, "Referer": "https://finance.naver.com/"}
     try:
-        wr = requests.get(wr_url, headers=wr_headers, timeout=8)
+        wr = requests.get(wr_url, headers=wr_headers, timeout=10)
         wr.raise_for_status()
         wr_soup = BeautifulSoup(wr.text, "lxml")
+
         for script in wr_soup.find_all("script"):
             content = script.string or ""
-            # summary_data → 보수율 + ETF 유형
-            if "summary_data" in content:
-                m_pay = re_mod.search(r'"TOT_PAY"\s*:\s*"?([0-9.]+)"?', content)
-                if m_pay:
+
+            # summary_data: 기초지수, 운용사, 보수율, ETF 유형
+            if "summary_data" in content and "BASE_IDX_NM_KOR" in content:
+                m = _re.search(r'"BASE_IDX_NM_KOR"\s*:\s*"([^"]*)"', content)
+                if m:
+                    result["index_name"] = m.group(1)
+                m = _re.search(r'"ISSUE_NM_KOR"\s*:\s*"([^"]*)"', content)
+                if m:
+                    result["issuer"] = m.group(1).replace("(주)", "").strip()
+                m = _re.search(r'"TOT_PAY"\s*:\s*"?([0-9.]+)"?', content)
+                if m:
                     try:
-                        result["expense_ratio"] = float(m_pay.group(1))
+                        result["expense_ratio"] = float(m.group(1))
                     except ValueError:
                         pass
-                m_typ = re_mod.search(r'"ETF_TYP_SVC_NM"\s*:\s*"([^"]*)"', content)
-                if m_typ:
-                    result["etf_type_svc"] = m_typ.group(1)
-            # status_data → 기간별 수익률 (ERN1·ERN3·ERN6·ERN12)
-            if "status_data" in content:
+                m = _re.search(r'"ETF_TYP_SVC_NM"\s*:\s*"([^"]*)"', content)
+                if m:
+                    result["etf_type_svc"] = m.group(1)
+
+            # product_summary_data: 상장일
+            if "product_summary_data" in content and "LIST_DT" in content:
+                m = _re.search(r'"LIST_DT"\s*:\s*"([^"]*)"', content)
+                if m:
+                    raw = m.group(1)  # e.g. "20020714"
+                    if len(raw) == 8:
+                        result["listed_date"] = f"{raw[:4]}.{raw[4:6]}.{raw[6:]}"
+                    else:
+                        result["listed_date"] = raw
+
+            # status_data: 기간별 수익률
+            if "status_data" in content and "ERN1" in content:
                 for ern_key, result_key in (
-                    ("ERN1", "return_1m"),
-                    ("ERN3", "return_3m_detail"),
-                    ("ERN6", "return_6m"),
+                    ("ERN1",  "return_1m"),
+                    ("ERN3",  "return_3m_detail"),
+                    ("ERN6",  "return_6m"),
                     ("ERN12", "return_1y"),
                 ):
-                    m = re_mod.search(rf'"{ern_key}"\s*:\s*"?(-?[0-9.]+)"?', content)
+                    m = _re.search(rf'"{ern_key}"\s*:\s*"?(-?[0-9.]+)"?', content)
                     if m:
                         try:
                             result[result_key] = float(m.group(1))
                         except ValueError:
                             pass
-    except Exception:
-        pass
+
+    except Exception as e:
+        logger.debug(f"WiseReport 상세 조회 실패 ({code}): {e}")
+    return result
 
 
 def get_all_etf_data(enrich_details: bool = True, max_workers: int = 20) -> list[dict]:
