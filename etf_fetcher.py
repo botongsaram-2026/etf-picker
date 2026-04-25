@@ -336,12 +336,14 @@ def _classify_asset_type(name: str, tab_code: int) -> str:
 
 
 def _classify_product_type(name: str) -> str:
-    """레버리지/인버스 여부"""
+    """레버리지/인버스/커버드콜 여부"""
     upper = name.upper()
     if "2X" in upper or "레버리지" in upper or "LEVERAGE" in upper:
         return "레버리지"
     if "인버스" in upper or "INVERSE" in upper or "곱버스" in upper:
         return "인버스"
+    if "커버드콜" in upper or "COVEREDCALL" in upper or "COVERED CALL" in upper:
+        return "커버드콜"
     return "일반"
 
 

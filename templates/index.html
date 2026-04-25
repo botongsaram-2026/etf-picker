@@ -138,6 +138,7 @@
     .badge-머니마켓 { background: #f0fdf4; color: #15803d; }
     .badge-레버리지 { background: #fef9c3; color: #713f12; }
     .badge-인버스 { background: #fee2e2; color: #991b1b; }
+    .badge-커버드콜 { background: #ecfdf5; color: #065f46; }
     .badge-dividend { background: #fdf4ff; color: #7c3aed; }
     .badge-월배당 { background: #fdf4ff; color: #7c3aed; }
     .badge-분기배당 { background: #f0fdf4; color: #166534; }
@@ -216,7 +217,7 @@
 
 <header>
   <h1>📊 ETF Picker</h1>
-  <p>네이버 금융 실시간 데이터 기반 · 조건에 맞는 ETF를 찾아보세요</p>
+  <p>네이버 금융 · ETFCheck · KRX 데이터 기반 · 조건에 맞는 ETF를 찾아보세요</p>
 </header>
 
 <!-- 모바일: 필터 오버레이 -->
@@ -259,6 +260,7 @@
         <button class="chip" data-value="일반">일반</button>
         <button class="chip" data-value="레버리지">레버리지</button>
         <button class="chip" data-value="인버스">인버스</button>
+        <button class="chip" data-value="커버드콜">커버드콜</button>
       </div>
     </div>
 
@@ -303,6 +305,9 @@
     <!-- 수익률 범위 (3개월 고정) -->
     <div class="filter-group">
       <label>3개월 수익률 범위 (%)</label>
+      <div style="font-size:0.67rem;color:var(--text-muted);margin-bottom:4px;line-height:1.4;">
+        네이버 금융 제공 NAV(기준가격) 3개월 변동률<br/>분배금 지급분은 포함되지 않음
+      </div>
       <div class="input-row">
         <input type="number" id="min-return" placeholder="최소 %" step="1" />
         <input type="number" id="max-return" placeholder="최대 %" step="1" />
